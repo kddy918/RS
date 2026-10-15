@@ -1,0 +1,35 @@
+# Backup only: GitHub Actions cannot reach 192.168.60.x from cloud runners.
+# Primary update path is the local Windows scheduled task running scripts/update-feeds.ps1.
+name: update-feeds-backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"  # 08:00 Asia/Shanghai
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch feeds (will fail if LAN unreachable)
+        continue-on-error: true
+        run: |
+          mkdir -p feeds
+          curl -fsSL -m 60 -o feeds/t66y-7.xml  "http://192.168.60.117:1200/t66y/7"  || echo "LAN unreachable for t66y-7"
+          curl -fsSL -m 60 -o feeds/t66y-20.xml "http://192.168.60.117:1200/t66y/20" || echo "LAN unreachable for t66y-20"
+          ls -la feeds || true
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add feeds/ || true
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: update RSS feeds (Actions backup)"
+            git push
+          fi
